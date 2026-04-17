@@ -18,6 +18,7 @@ import {
   FileCode,
   Globe,
   Copy,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,7 +100,7 @@ function SkillDetailDialog({ skill, isOpen, onClose, onToggle, onUninstall, onOp
 
   const handleOpenClawhub = async () => {
     if (!skill?.slug) return;
-    await invokeIpc('shell:openExternal', `https://clawhub.ai/s/${skill.slug}`);
+    await invokeIpc('shell:openExternal', `https://mirror-cn.clawhub.com/s/${skill.slug}`);
   };
 
   const handleOpenEditor = async () => {
@@ -408,7 +409,9 @@ export function Skills() {
     uninstallSkill,
     searching,
     searchError,
-    installing
+    installing,
+    marketplaceUrl,
+    setMarketplaceUrl
   } = useSkillsStore();
   const { t } = useTranslation('skills');
   const gatewayStatus = useGatewayStore((state) => state.status);
@@ -417,6 +420,8 @@ export function Skills() {
   const [installSheetOpen, setInstallSheetOpen] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [selectedSource, setSelectedSource] = useState<'all' | 'built-in' | 'marketplace'>('all');
+  const [marketplaceConfigOpen, setMarketplaceConfigOpen] = useState(false);
+  const [configUrl, setConfigUrl] = useState(marketplaceUrl);
 
   const isGatewayRunning = gatewayStatus.state === 'running';
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
@@ -733,6 +738,18 @@ export function Skills() {
             >
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                setConfigUrl(marketplaceUrl);
+                setMarketplaceConfigOpen(true);
+              }}
+              className="h-8 w-8 rounded-md border-black/10 dark:border-white/10 bg-transparent hover:bg-black/5 dark:hover:bg-white/5 shadow-none text-muted-foreground hover:text-foreground"
+              title={t('marketplace.settings', 'Marketplace Settings')}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -878,7 +895,7 @@ export function Skills() {
                     <div
                       key={skill.slug}
                       className="group flex flex-row items-center justify-between py-3.5 px-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-black/5 dark:border-white/5 last:border-0"
-                      onClick={() => invokeIpc('shell:openExternal', `https://clawhub.ai/s/${skill.slug}`)}
+                      onClick={() => invokeIpc('shell:openExternal', `https://mirror-cn.clawhub.com/s/${skill.slug}`)}
                     >
                       <div className="flex items-start gap-4 flex-1 overflow-hidden pr-4">
                         <div className="h-10 w-10 shrink-0 flex items-center justify-center text-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl overflow-hidden">
@@ -936,6 +953,60 @@ export function Skills() {
                 <p>{installQuery.trim() ? t('marketplace.noResults') : t('marketplace.emptyPrompt')}</p>
               </div>
             )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Marketplace Configuration Dialog */}
+      <Sheet open={marketplaceConfigOpen} onOpenChange={setMarketplaceConfigOpen}>
+        <SheetContent
+          className="w-full sm:max-w-[450px] p-0 flex flex-col border-l border-black/10 dark:border-white/10 bg-[#f3f1e9] dark:bg-card shadow-[0_0_40px_rgba(0,0,0,0.2)]"
+          side="right"
+        >
+          <div className="px-7 py-6 border-b border-black/10 dark:border-white/10">
+            <h2 className="text-[24px] font-serif text-foreground font-normal tracking-tight">{t('marketplace.configTitle', 'Marketplace Settings')}</h2>
+            <p className="mt-1 text-[13px] text-foreground/70">{t('marketplace.configSubtitle', 'Configure your custom marketplace registry')}</p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-7 py-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-foreground/80 flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  {t('marketplace.registryUrl', 'Registry URL')}
+                </label>
+                <Input
+                  placeholder="https://mirror-cn.clawhub.com"
+                  value={configUrl}
+                  onChange={(e) => setConfigUrl(e.target.value)}
+                  className="h-[44px] font-mono text-[13px] bg-[#eeece3] dark:bg-muted border-black/10 dark:border-white/10 rounded-xl focus-visible:ring-2 focus-visible:ring-blue-500/50 shadow-sm text-foreground placeholder:text-foreground/40"
+                />
+                <p className="text-[12px] text-foreground/50 mt-2 font-medium">
+                  {t('marketplace.registryDesc', 'Enter the URL of your custom ClawHub registry. Leave empty to use the default registry.')}
+                </p>
+              </div>
+
+              <div className="pt-4 flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMarketplaceConfigOpen(false)}
+                  className="h-[38px] text-[13px] rounded-full font-semibold shadow-sm bg-transparent border-black/20 dark:border-white/20 hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-foreground/80"
+                >
+                  {t('marketplace.cancel', 'Cancel')}
+                </Button>
+                <Button
+                  onClick={() => {
+                    setMarketplaceUrl(configUrl.trim() || 'https://mirror-cn.clawhub.com');
+                    setMarketplaceConfigOpen(false);
+                    toast.success(t('marketplace.saved', 'Settings saved'));
+                  }}
+                  className="h-[38px] text-[13px] rounded-full font-semibold shadow-sm border border-transparent transition-all bg-[#0a84ff] hover:bg-[#007aff] text-white"
+                >
+                  {t('marketplace.save', 'Save')}
+                </Button>
+              </div>
+            </div>
           </div>
         </SheetContent>
       </Sheet>

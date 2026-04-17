@@ -1,10 +1,9 @@
 import { dirname, join } from 'path';
-import { homedir } from 'os';
 import { createRequire } from 'module';
 import { EventEmitter } from 'events';
 import { existsSync, mkdirSync, rmSync, readdirSync } from 'fs';
 import { deflateSync } from 'zlib';
-import { getOpenClawDir, getOpenClawResolvedDir } from './paths';
+import { getOpenClawDir, getOpenClawResolvedDir, getOpenClawConfigDir } from './paths';
 
 const require = createRequire(import.meta.url);
 
@@ -16,7 +15,7 @@ const openclawResolvedPath = getOpenClawResolvedDir();
 const openclawRequire = createRequire(join(openclawResolvedPath, 'package.json'));
 // Fallback: resolves from the symlink path (`node_modules/openclaw`).
 // In dev mode, Node walks UP from here to `<project>/node_modules/`, which
-// contains ClawX's own devDependencies — packages that are NOT deps of openclaw
+// contains IClaw's own devDependencies — packages that are NOT deps of openclaw
 // (e.g. @whiskeysockets/baileys) become resolvable through pnpm hoisting.
 const projectRequire = createRequire(join(openclawPath, 'package.json'));
 
@@ -26,7 +25,7 @@ function resolveOpenClawPackageJson(packageName: string): string {
     try {
         return openclawRequire.resolve(specifier);
     } catch { /* fall through */ }
-    // 2. Fallback to project-level deps (works in dev mode for ClawX devDependencies)
+    // 2. Fallback to project-level deps (works in dev mode for IClaw devDependencies)
     try {
         return projectRequire.resolve(specifier);
     } catch (err) {
@@ -248,7 +247,7 @@ export class WhatsAppLoginManager extends EventEmitter {
 
         try {
             // Path where OpenClaw expects WhatsApp credentials
-            const authDir = join(homedir(), '.openclaw', 'credentials', 'whatsapp', accountId);
+            const authDir = join(getOpenClawConfigDir(), 'credentials', 'whatsapp', accountId);
 
             // Ensure directory exists
             if (!existsSync(authDir)) {
@@ -297,7 +296,7 @@ export class WhatsAppLoginManager extends EventEmitter {
                 logger: pino({ level: 'silent' }), // Silent logger
                 connectTimeoutMs: 60000,
                 // mobile: false,
-                // browser: ['ClawX', 'Chrome', '1.0.0'],
+                // browser: ['IClaw', 'Chrome', '1.0.0'],
             });
 
             let connectionOpened = false;
@@ -430,12 +429,12 @@ export class WhatsAppLoginManager extends EventEmitter {
         // as configured based solely on the existence of this directory.
         if (shouldCleanup && cleanupAccountId) {
             try {
-                const authDir = join(homedir(), '.openclaw', 'credentials', 'whatsapp', cleanupAccountId);
+                const authDir = join(getOpenClawConfigDir(), 'credentials', 'whatsapp', cleanupAccountId);
                 if (existsSync(authDir)) {
                     rmSync(authDir, { recursive: true, force: true });
                     console.log(`[WhatsAppLogin] Cleaned up auth dir for cancelled login: ${authDir}`);
                     // Also remove the parent whatsapp dir if it's now empty
-                    const parentDir = join(homedir(), '.openclaw', 'credentials', 'whatsapp');
+                    const parentDir = join(getOpenClawConfigDir(), 'credentials', 'whatsapp');
                     if (existsSync(parentDir)) {
                         const remaining = readdirSync(parentDir);
                         if (remaining.length === 0) {

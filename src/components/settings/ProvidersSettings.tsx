@@ -148,7 +148,11 @@ function getAuthModeLabel(
   }
 }
 
-export function ProvidersSettings() {
+interface ProvidersSettingsProps {
+  locked?: boolean;
+}
+
+export function ProvidersSettings({ locked = false }: ProvidersSettingsProps) {
   const { t } = useTranslation('settings');
   const devModeUnlocked = useSettingsStore((state) => state.devModeUnlocked);
   const {
@@ -246,10 +250,12 @@ export function ProvidersSettings() {
         <h2 data-testid="providers-settings-title" className="text-3xl font-serif text-foreground font-normal tracking-tight" style={{ fontFamily: 'Georgia, Cambria, "Times New Roman", Times, serif' }}>
           {t('aiProviders.title', 'AI Providers')}
         </h2>
-        <Button data-testid="providers-add-button" onClick={() => setShowAddDialog(true)} className="rounded-full px-5 h-9 shadow-none font-medium text-[13px]">
-          <Plus className="h-4 w-4 mr-2" />
-          {t('aiProviders.add')}
-        </Button>
+        {!locked && (
+          <Button data-testid="providers-add-button" onClick={() => setShowAddDialog(true)} className="rounded-full px-5 h-9 shadow-none font-medium text-[13px]">
+            <Plus className="h-4 w-4 mr-2" />
+            {t('aiProviders.add')}
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -263,10 +269,12 @@ export function ProvidersSettings() {
           <p className="text-[13px] text-center mb-6 max-w-sm">
             {t('aiProviders.empty.desc')}
           </p>
-          <Button onClick={() => setShowAddDialog(true)} className="rounded-full px-6 h-10 bg-[#0a84ff] hover:bg-[#007aff] text-white">
-            <Plus className="h-4 w-4 mr-2" />
-            {t('aiProviders.empty.cta')}
-          </Button>
+          {!locked && (
+            <Button onClick={() => setShowAddDialog(true)} className="rounded-full px-6 h-10 bg-[#0a84ff] hover:bg-[#007aff] text-white">
+              <Plus className="h-4 w-4 mr-2" />
+              {t('aiProviders.empty.cta')}
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -302,6 +310,7 @@ export function ProvidersSettings() {
               }}
               onValidateKey={(key, options) => validateAccountApiKey(item.account.id, key, options)}
               devModeUnlocked={devModeUnlocked}
+              locked={locked}
             />
           ))}
         </div>
@@ -337,6 +346,7 @@ interface ProviderCardProps {
     options?: { baseUrl?: string; apiProtocol?: ProviderAccount['apiProtocol'] }
   ) => Promise<{ valid: boolean; error?: string }>;
   devModeUnlocked: boolean;
+  locked?: boolean;
 }
 
 
@@ -353,6 +363,7 @@ function ProviderCard({
   onSaveEdits,
   onValidateKey,
   devModeUnlocked,
+  locked = false,
 }: ProviderCardProps) {
   const { t, i18n } = useTranslation('settings');
   const { account, vendor, status } = item;
@@ -569,7 +580,7 @@ function ProviderCard({
           </div>
         </div>
 
-        {!isEditing && (
+        {!isEditing && !locked && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {!isDefault && (
             <Button

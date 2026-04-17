@@ -140,7 +140,7 @@ export async function setSetting<K extends keyof AppSettings>(
   value: AppSettings[K]
 ): Promise<void> {
   const store = await getSettingsStore();
-  store.set(key, value);
+  store.set(key);
 }
 
 /**

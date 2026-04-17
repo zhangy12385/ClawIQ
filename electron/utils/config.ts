@@ -7,10 +7,10 @@
  * Port configuration
  */
 export const PORTS = {
-  /** ClawX GUI development server port */
+  /** IClaw GUI development server port */
   CLAWX_DEV: 5173,
   
-  /** ClawX GUI production port (for reference) */
+  /** IClaw GUI production port (for reference) */
   CLAWX_GUI: 23333,
 
   /** Local host API server port */
@@ -36,7 +36,7 @@ export const APP_PATHS = {
   /** OpenClaw configuration directory */
   OPENCLAW_CONFIG: '~/.openclaw',
   
-  /** ClawX configuration directory */
+  /** IClaw configuration directory */
   CLAWX_CONFIG: '~/.clawx',
   
   /** Log files directory */
@@ -55,16 +55,38 @@ export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
 export const UPDATE_CONFIG = {
   /** Check interval in milliseconds (6 hours) */
   CHECK_INTERVAL: 6 * 60 * 60 * 1000,
-  
+
   /** Default update channel */
   DEFAULT_CHANNEL: 'stable' as UpdateChannel,
-  
+
   /** Auto download updates */
   AUTO_DOWNLOAD: false,
-  
+
   /** Show update notifications */
   SHOW_NOTIFICATION: true,
 };
+
+/**
+ * 内置中转站配置
+ */
+export const BUILTIN_RELAY_STATION = {
+  /** 默认中转站地址（固定为 IClaw 中转站） */
+  DEFAULT_URL: 'https://llm.fatgpt.cn',
+
+  /** 是否允许用户修改中转站地址 */
+  ALLOW_CUSTOM: false,
+} as const;
+
+/**
+ * 软件市场配置
+ */
+export const SKILL_MARKETPLACE = {
+  /** 默认市场地址 */
+  DEFAULT_REGISTRY: 'https://mirror-cn.clawhub.com',
+
+  /** 配置存储键名 */
+  CONFIG_KEY: 'skillMarketplace',
+} as const;
 
 /**
  * Gateway configuration

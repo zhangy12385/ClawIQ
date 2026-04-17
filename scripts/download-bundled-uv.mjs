@@ -50,6 +50,14 @@ async function setupTarget(id) {
   }
 
   const targetDir = path.join(OUTPUT_BASE, id);
+  const destBin = path.join(targetDir, target.binName);
+
+  // Skip if already exists
+  if (await fs.pathExists(destBin)) {
+    echo(chalk.green`✅ ${destBin} already exists, skipping download.`);
+    return;
+  }
+
   const tempDir = path.join(ROOT_DIR, 'temp_uv_extract');
   const archivePath = path.join(ROOT_DIR, target.filename);
   const downloadUrl = `${BASE_URL}/${target.filename}`;

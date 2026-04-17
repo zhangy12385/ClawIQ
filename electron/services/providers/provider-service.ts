@@ -389,3 +389,34 @@ const providerService = new ProviderService();
 export function getProviderService(): ProviderService {
   return providerService;
 }
+
+export async function saveRelayStationConfig(
+  url: string,
+  apiKey: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 使用 custom provider 类型
+    const account: ProviderAccount = {
+      id: 'relay-station',
+      vendorId: 'custom',
+      label: '中转站',
+      authMode: 'api_key',
+      baseUrl: url,
+      apiProtocol: 'openai-completions',
+      enabled: true,
+      isDefault: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // 保存账户配置
+    await saveProviderAccount(account, apiKey);
+
+    // 设置为默认
+    await setDefaultProviderAccount('relay-station');
+
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}

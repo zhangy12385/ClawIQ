@@ -62,7 +62,6 @@
         "connectionStatus": {
             "connected": "已连接",
             "connecting": "连接中",
-            "degraded": "异常降级",
             "disconnected": "未连接",
             "error": "异常"
         },
@@ -99,30 +98,6 @@
         "updateAndReconnect": "更新并重新连接",
         "saveAndConnect": "保存并连接",
         "envVar": "环境变量: {{var}}"
-    },
-    "health": {
-        "state": {
-            "degraded": "网关状态异常",
-            "unresponsive": "网关无响应"
-        },
-        "reasons": {
-            "gateway_degraded": "网关心跳近期出现异常。",
-            "gateway_unresponsive": "网关控制面看起来已经无响应。",
-            "channels_status_timeout": "频道运行时状态探测超时。",
-            "rpc_timeout": "最近的网关 RPC 调用发生超时。",
-            "gateway_not_running": "网关当前未运行。",
-            "gateway_error": "网关当前处于错误状态。",
-            "runtime_error": "频道运行时返回了错误。"
-        },
-        "restartGateway": "重启网关",
-        "copyDiagnostics": "复制诊断快照",
-        "viewDiagnostics": "查看诊断快照",
-        "hideDiagnostics": "隐藏诊断快照",
-        "diagnosticsTitle": "网关诊断快照",
-        "diagnosticsCopied": "诊断快照已复制到剪贴板",
-        "diagnosticsCopyFailed": "收集诊断快照失败：{{error}}",
-        "restartTriggered": "已请求重启网关",
-        "restartFailed": "重启网关失败：{{error}}"
     },
     "meta": {
         "telegram": {
@@ -189,7 +164,7 @@
             "description": "通过腾讯官方 OpenClaw 插件扫码连接个人微信",
             "docsUrl": "https://icnnp7d0dymg.feishu.cn/wiki/GHYZwuPCriF0gWkXwkFcJ9zon3b",
             "instructions": [
-                "点击生成二维码，ClawX 会在 OpenClaw 中安装并启用官方微信插件",
+                "点击生成二维码，IClaw 会在 OpenClaw 中安装并启用官方微信插件",
                 "使用微信扫描下方二维码，并在手机上确认连接",
                 "连接成功后，微信里会自动出现新的「微信 ClawBot」对话",
                 "之后可再次通过扫码流程添加更多微信账号，或重新连接已有账号"

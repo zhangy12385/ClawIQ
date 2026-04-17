@@ -83,6 +83,7 @@ const electronAPI = {
         'provider:setDefault',
         'provider:getDefault',
         'provider:validateKey',
+        'provider:saveRelayStation',
         'provider:requestOAuth',
         'provider:cancelOAuth',
         // Cron
@@ -180,7 +181,8 @@ const electronAPI = {
         'openclaw:cli-installed',
       ];
 
-      if (validChannels.includes(channel) || channel.startsWith('ext:')) {
+      if (validChannels.includes(channel)) {
+        // Wrap the callback to strip the event
         const subscription = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => {
           callback(...args);
         };
@@ -227,7 +229,7 @@ const electronAPI = {
         'oauth:error',
       ];
 
-      if (validChannels.includes(channel) || channel.startsWith('ext:')) {
+      if (validChannels.includes(channel)) {
         ipcRenderer.once(channel, (_event, ...args) => callback(...args));
         return;
       }

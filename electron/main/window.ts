@@ -39,7 +39,7 @@ async function getStore() {
 export async function getWindowState(): Promise<WindowState> {
   const store = await getStore();
   const state = store.get('windowState');
-  
+
   // Validate that the window is visible on a screen
   if (state.x !== undefined && state.y !== undefined) {
     const displays = screen.getAllDisplays();
@@ -52,14 +52,14 @@ export async function getWindowState(): Promise<WindowState> {
         state.y! < y + height
       );
     });
-    
+
     if (!isVisible) {
       // Reset position if not visible
       delete state.x;
       delete state.y;
     }
   }
-  
+
   return state;
 }
 
@@ -69,7 +69,7 @@ export async function getWindowState(): Promise<WindowState> {
 export async function saveWindowState(win: BrowserWindow): Promise<void> {
   const store = await getStore();
   const isMaximized = win.isMaximized();
-  
+
   if (!isMaximized) {
     const bounds = win.getBounds();
     store.set('windowState', {

@@ -65,6 +65,7 @@ interface SkillsState {
   searchError: string | null;
   installing: Record<string, boolean>; // slug -> boolean
   error: string | null;
+  marketplaceUrl: string; // Custom marketplace registry URL
 
   // Actions
   fetchSkills: () => Promise<void>;
@@ -75,6 +76,7 @@ interface SkillsState {
   disableSkill: (skillId: string) => Promise<void>;
   setSkills: (skills: Skill[]) => void;
   updateSkill: (skillId: string, updates: Partial<Skill>) => void;
+  setMarketplaceUrl: (url: string) => void;
 }
 
 export const useSkillsStore = create<SkillsState>((set, get) => ({
@@ -85,6 +87,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   searchError: null,
   installing: {},
   error: null,
+  marketplaceUrl: 'https://mirror-cn.clawhub.com',
 
   fetchSkills: async () => {
     // Only show loading state if we have no skills yet (initial load)
@@ -288,5 +291,9 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
         skill.id === skillId ? { ...skill, ...updates } : skill
       ),
     }));
+  },
+
+  setMarketplaceUrl: (url: string) => {
+    set({ marketplaceUrl: url });
   },
 }));

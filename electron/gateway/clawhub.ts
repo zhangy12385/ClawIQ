@@ -40,30 +40,12 @@ export interface ClawHubInstalledSkillResult {
     baseDir?: string;
 }
 
-export interface MarketplaceProvider {
-    getCapability(): Promise<{ mode: string; canSearch: boolean; canInstall: boolean; reason?: string }>;
-    search(params: ClawHubSearchParams): Promise<ClawHubSkillResult[]>;
-    install(params: ClawHubInstallParams): Promise<void>;
-}
-
 export class ClawHubService {
     private workDir: string;
     private cliPath: string;
     private cliEntryPath: string;
     private useNodeRunner: boolean;
     private ansiRegex: RegExp;
-    private marketplaceProvider: MarketplaceProvider | null = null;
-
-    setMarketplaceProvider(provider: MarketplaceProvider): void {
-        this.marketplaceProvider = provider;
-    }
-
-    async getMarketplaceCapability(): Promise<{ mode: string; canSearch: boolean; canInstall: boolean; reason?: string }> {
-        if (this.marketplaceProvider) {
-            return this.marketplaceProvider.getCapability();
-        }
-        return { mode: 'clawhub', canSearch: true, canInstall: true };
-    }
 
     constructor() {
         // Use the user's OpenClaw config directory (~/.openclaw) for skill management
@@ -144,7 +126,7 @@ export class ClawHubService {
     /**
      * Run a ClawHub CLI command
      */
-    private async runCommand(args: string[]): Promise<string> {
+    private async runCommand(args: string[], registry?: string): Promise<string> {
         return new Promise((resolve, reject) => {
             if (this.useNodeRunner && !fs.existsSync(this.cliEntryPath)) {
                 reject(new Error(`ClawHub CLI entry not found at: ${this.cliEntryPath}`));
@@ -157,6 +139,11 @@ export class ClawHubService {
             }
 
             const commandArgs = this.useNodeRunner ? [this.cliEntryPath, ...args] : args;
+
+            // If a custom registry is provided, add it to the command arguments
+            if (registry) {
+                commandArgs.push('--registry', registry);
+            }
             const displayCommand = [this.cliPath, ...commandArgs].join(' ');
             console.log(`Running ClawHub command: ${displayCommand}`);
 
@@ -212,17 +199,13 @@ export class ClawHubService {
     }
 
     /**
-     * Search for skills. Delegates to the marketplace provider if one is set,
-     * otherwise falls back to the local ClawHub CLI.
+     * Search for skills
      */
-    async search(params: ClawHubSearchParams): Promise<ClawHubSkillResult[]> {
-        if (this.marketplaceProvider) {
-            return this.marketplaceProvider.search(params);
-        }
+    async search(params: ClawHubSearchParams, registry?: string): Promise<ClawHubSkillResult[]> {
         try {
             // If query is empty, use 'explore' to show trending skills
             if (!params.query || params.query.trim() === '') {
-                return this.explore({ limit: params.limit });
+                return this.explore({ limit: params.limit }, registry);
             }
 
             const args = ['search', params.query];
@@ -230,7 +213,7 @@ export class ClawHubService {
                 args.push('--limit', String(params.limit));
             }
 
-            const output = await this.runCommand(args);
+            const output = await this.runCommand(args, registry);
             if (!output || output.includes('No skills found')) {
                 return [];
             }
@@ -286,14 +269,14 @@ export class ClawHubService {
     /**
      * Explore trending skills
      */
-    async explore(params: { limit?: number } = {}): Promise<ClawHubSkillResult[]> {
+    async explore(params: { limit?: number } = {}, registry?: string): Promise<ClawHubSkillResult[]> {
         try {
             const args = ['explore'];
             if (params.limit) {
                 args.push('--limit', String(params.limit));
             }
 
-            const output = await this.runCommand(args);
+            const output = await this.runCommand(args, registry);
             if (!output) return [];
 
             const lines = output.split('\n').filter(l => l.trim());
@@ -320,13 +303,9 @@ export class ClawHubService {
     }
 
     /**
-     * Install a skill. Delegates to the marketplace provider if one is set,
-     * otherwise falls back to the local ClawHub CLI.
+     * Install a skill
      */
     async install(params: ClawHubInstallParams): Promise<void> {
-        if (this.marketplaceProvider) {
-            return this.marketplaceProvider.install(params);
-        }
         const args = ['install', params.slug];
 
         if (params.version) {

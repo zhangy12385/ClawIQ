@@ -4,7 +4,9 @@
  */
 import { app, BrowserWindow, nativeImage, session, shell } from 'electron';
 import type { Server } from 'node:http';
+import { existsSync, mkdirSync, cpSync } from 'fs';
 import { join } from 'path';
+import { getResourcesDir } from '../utils/paths';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createTray } from './tray';
@@ -16,10 +18,6 @@ import { warmupNetworkOptimization } from '../utils/uv-env';
 import { initTelemetry } from '../utils/telemetry';
 
 import { ClawHubService } from '../gateway/clawhub';
-import { extensionRegistry } from '../extensions/registry';
-import { loadExtensionsFromManifest } from '../extensions/loader';
-import { registerAllBuiltinExtensions } from '../extensions/builtin';
-import { loadExternalMainExtensions } from '../extensions/_ext-bridge.generated';
 import { ensureClawXContext, repairClawXOnlyBootstrapFiles } from '../utils/openclaw-workspace';
 import { autoInstallCliIfNeeded, generateCompletionCache, installCompletionToProfile } from '../utils/openclaw-cli';
 import { isQuitting, setQuitting } from './app-state';
@@ -43,6 +41,8 @@ import { ensureBuiltinSkillsInstalled, ensurePreinstalledSkillsInstalled } from 
 import { ensureAllBundledPluginsInstalled } from '../utils/plugin-install';
 import { startHostApiServer } from '../api/server';
 import { HostEventBus } from '../api/event-bus';
+import { initializePortableData } from '../utils/data-init';
+import { detectPortableMode } from '../utils/portable-detector';
 import { deviceOAuthManager } from '../utils/device-oauth';
 import { browserOAuthManager } from '../utils/browser-oauth';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
@@ -87,7 +87,7 @@ if (process.platform === 'linux') {
 // The losing process must exit immediately so it never reaches Gateway startup.
 const gotElectronLock = isE2EMode ? true : app.requestSingleInstanceLock();
 if (!gotElectronLock) {
-  console.info('[ClawX] Another instance already holds the single-instance lock; exiting duplicate process');
+  console.info('[IClaw] Another instance already holds the single-instance lock; exiting duplicate process');
   app.exit(0);
 }
 let releaseProcessInstanceFileLock: () => void = () => {};
@@ -108,12 +108,12 @@ if (gotElectronLock && !isE2EMode) {
           ? 'unknown lock format/content'
           : 'unknown owner';
       console.info(
-        `[ClawX] Another instance already holds process lock (${fileLock.lockPath}, ${ownerDescriptor}); exiting duplicate process`,
+        `[IClaw] Another instance already holds process lock (${fileLock.lockPath}, ${ownerDescriptor}); exiting duplicate process`,
       );
       app.exit(0);
     }
   } catch (error) {
-    console.warn('[ClawX] Failed to acquire process instance file lock; continuing with Electron single-instance lock only', error);
+    console.warn('[IClaw] Failed to acquire process instance file lock; continuing with Electron single-instance lock only', error);
   }
 }
 const gotTheLock = gotElectronLock && gotFileLock;
@@ -281,7 +281,7 @@ function createMainWindow(): BrowserWindow {
 async function initialize(): Promise<void> {
   // Initialize logger first
   logger.init();
-  logger.info('=== ClawX Application Starting ===');
+  logger.info('=== IClaw Application Starting ===');
   logger.debug(
     `Runtime: platform=${process.platform}/${process.arch}, electron=${process.versions.electron}, node=${process.versions.node}, packaged=${app.isPackaged}, pid=${process.pid}, ppid=${process.ppid}`
   );
@@ -344,26 +344,13 @@ async function initialize(): Promise<void> {
     mainWindow: window,
   });
 
-  // Initialize extension system
-  await extensionRegistry.initialize({
-    gatewayManager,
-    eventBus: hostEventBus,
-    getMainWindow: () => mainWindow,
-  });
-
-  // Wire marketplace provider to ClawHubService if an extension provides one
-  const marketplaceProvider = extensionRegistry.getMarketplaceProvider();
-  if (marketplaceProvider) {
-    clawHubService.setMarketplaceProvider(marketplaceProvider);
-  }
-
   // Register update handlers
   registerUpdateHandlers(appUpdater, window);
 
   // Note: Auto-check for updates is driven by the renderer (update store init)
   // so it respects the user's "Auto-check for updates" setting.
 
-  // Repair any bootstrap files that only contain ClawX markers (no OpenClaw
+  // Repair any bootstrap files that only contain IClaw markers (no OpenClaw
   // template content). This fixes a race condition where ensureClawXContext()
   // previously created the file before the gateway could seed the full template.
   if (!isE2EMode) {
@@ -404,7 +391,7 @@ async function initialize(): Promise<void> {
     hostEventBus.emit('gateway:status', status);
     if (status.state === 'running' && !isE2EMode) {
       void ensureClawXContext().catch((error) => {
-        logger.warn('Failed to re-merge ClawX context after gateway reconnect:', error);
+        logger.warn('Failed to re-merge IClaw context after gateway reconnect:', error);
       });
     }
   });
@@ -491,12 +478,12 @@ async function initialize(): Promise<void> {
     logger.info('Gateway auto-start disabled in settings');
   }
 
-  // Merge ClawX context snippets into the workspace bootstrap files.
+  // Merge IClaw context snippets into the workspace bootstrap files.
   // The gateway seeds workspace files asynchronously after its HTTP server
   // is ready, so ensureClawXContext will retry until the target files appear.
   if (!isE2EMode) {
     void ensureClawXContext().catch((error) => {
-      logger.warn('Failed to merge ClawX context into workspace:', error);
+      logger.warn('Failed to merge IClaw context into workspace:', error);
     });
   }
 
@@ -538,16 +525,9 @@ if (gotTheLock) {
   clawHubService = new ClawHubService();
   hostEventBus = new HostEventBus();
 
-  // Register builtin extensions and load manifest
-  registerAllBuiltinExtensions();
-  loadExternalMainExtensions();
-  void loadExtensionsFromManifest().catch((err) => {
-    logger.warn('Failed to load extensions from manifest:', err);
-  });
-
   // When a second instance is launched, focus the existing window instead.
   app.on('second-instance', () => {
-    logger.info('Second ClawX instance detected; redirecting to the existing window');
+    logger.info('Second IClaw instance detected; redirecting to the existing window');
 
     const focusRequest = requestSecondInstanceFocus(
       mainWindowFocusState,
@@ -564,6 +544,59 @@ if (gotTheLock) {
 
   // Application lifecycle
   app.whenReady().then(() => {
+    // Initialize portable data directory BEFORE app initialization
+    // This must happen before any code that calls app.getPath('userData')
+    const initResult = initializePortableData();
+    if (!initResult.success) {
+      console.error('Failed to initialize portable data:', initResult.error);
+    }
+    if (initResult.portableMode) {
+      // Get the portable data dir again since DataInitResult doesn't expose it
+      const { dataDir } = detectPortableMode();
+      console.log('Running in portable mode, data dir:', dataDir);
+
+      // PRESET: Copy AGENTS.clawx.md and TOOLS.clawx.md to the OpenClaw workspace
+      // directory during first launch so they are immediately available.
+      try {
+        const openclawConfigDir = join(dataDir, '.openclaw');
+        const workspaceDir = join(openclawConfigDir, 'workspace');
+
+        // Safely get resources directory with fallback
+        let contextDir: string;
+        try {
+          contextDir = join(getResourcesDir(), 'context');
+        } catch {
+          console.warn('[index] Could not get resources directory, skipping workspace preset');
+          contextDir = '';
+        }
+
+        if (!contextDir) {
+          // Skip preset
+        } else if (!existsSync(contextDir)) {
+          console.warn('[index] Context directory does not exist:', contextDir);
+        } else {
+          const presetFiles = ['AGENTS.clawx.md', 'TOOLS.clawx.md'];
+
+          // Ensure workspace directory exists
+          if (!existsSync(workspaceDir)) {
+            mkdirSync(workspaceDir, { recursive: true });
+          }
+
+          // Copy preset files to workspace
+          for (const presetFile of presetFiles) {
+            const sourcePath = join(contextDir, presetFile);
+            const targetPath = join(workspaceDir, presetFile.replace('.clawx.md', '.md'));
+            if (existsSync(sourcePath) && !existsSync(targetPath)) {
+              cpSync(sourcePath, targetPath);
+              console.log('[index] Preset workspace file copied:', presetFile);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[index] Failed to preset workspace files:', error);
+      }
+    }
+
     void initialize().catch((error) => {
       logger.error('Application initialization failed:', error);
     });
@@ -602,7 +635,6 @@ if (gotTheLock) {
 
     hostEventBus.closeAll();
     hostApiServer?.close();
-    void extensionRegistry.teardownAll();
 
     const stopPromise = gatewayManager.stop().catch((err) => {
       logger.warn('gatewayManager.stop() error during quit:', err);

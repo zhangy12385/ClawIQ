@@ -291,7 +291,7 @@ export function Models() {
         <div className="flex-1 overflow-y-auto pr-2 pb-10 min-h-0 -mr-2 space-y-12">
           
           {/* AI Providers Section */}
-          <ProvidersSettings />
+          <ProvidersSettings locked={true} />
 
           {/* Token Usage History Section */}
           <div>

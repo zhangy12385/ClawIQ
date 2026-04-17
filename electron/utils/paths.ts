@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs';
+import { detectPortableMode } from './portable-detector';
 
 const require = createRequire(import.meta.url);
 
@@ -51,6 +52,10 @@ export function expandPath(path: string): string {
  * Get OpenClaw config directory
  */
 export function getOpenClawConfigDir(): string {
+  const portable = detectPortableMode();
+  if (portable.enabled) {
+    return join(portable.dataDir, '.openclaw');
+  }
   return join(homedir(), '.openclaw');
 }
 
@@ -62,23 +67,35 @@ export function getOpenClawSkillsDir(): string {
 }
 
 /**
- * Get ClawX config directory
+ * Get IClaw config directory
  */
 export function getClawXConfigDir(): string {
-  return join(homedir(), '.clawx');
+  const portable = detectPortableMode();
+  if (portable.enabled) {
+    return join(portable.dataDir, 'iclaw-config');
+  }
+  return join(homedir(), '.iclaw');
 }
 
 /**
- * Get ClawX logs directory
+ * Get IClaw logs directory
  */
 export function getLogsDir(): string {
-  return join(getElectronApp().getPath('userData'), 'logs');
+  const portable = detectPortableMode();
+  if (portable.enabled) {
+    return join(portable.dataDir, 'logs');
+  }
+  return getElectronApp().getPath('userData');
 }
 
 /**
- * Get ClawX data directory
+ * Get IClaw data directory
  */
 export function getDataDir(): string {
+  const portable = detectPortableMode();
+  if (portable.enabled) {
+    return portable.dataDir;
+  }
   return getElectronApp().getPath('userData');
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env zx
 
 import 'zx/globals';
-import { readFileSync, existsSync, mkdirSync, rmSync, cpSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, rmSync, cpSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,6 +31,8 @@ function loadManifest() {
 function groupByRepoRef(entries) {
   const grouped = new Map();
   for (const entry of entries) {
+    // Skip local repos - they're handled by the local skills copying section below
+    if (entry.repo === 'local') continue;
     const ref = entry.ref || 'main';
     const key = `${entry.repo}#${ref}`;
     if (!grouped.has(key)) grouped.set(key, { repo: entry.repo, ref, entries: [] });
@@ -159,6 +161,29 @@ for (const group of groups) {
     });
 
     echo`   OK ${entry.slug}`;
+  }
+}
+
+// Copy local skills from resources/skills/local/
+const LOCAL_SKILLS_DIR = join(ROOT, 'resources', 'skills', 'local');
+if (existsSync(LOCAL_SKILLS_DIR)) {
+  echo`Copying local skills from ${LOCAL_SKILLS_DIR}`;
+  for (const skill of fs.readdirSync(LOCAL_SKILLS_DIR)) {
+    const src = join(LOCAL_SKILLS_DIR, skill);
+    const dest = join(OUTPUT_ROOT, skill);
+    if (existsSync(join(src, 'SKILL.md'))) {
+      rmSync(dest, { recursive: true, force: true });
+      cpSync(src, dest, { recursive: true, dereference: true });
+      echo`   OK ${skill} (local)`;
+      lock.skills.push({
+        slug: skill,
+        version: 'local',
+        repo: 'local',
+        repoPath: skill,
+        ref: 'local',
+        commit: 'local',
+      });
+    }
   }
 }
 

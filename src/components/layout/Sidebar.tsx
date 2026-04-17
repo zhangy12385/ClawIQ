@@ -20,7 +20,6 @@ import {
   Cpu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { rendererExtensionRegistry } from '@/extensions/registry';
 import { useSettingsStore } from '@/stores/settings';
 import { useChatStore } from '@/stores/chat';
 import { useGatewayStore } from '@/stores/gateway';
@@ -209,10 +208,7 @@ export function Sidebar() {
     sessionBucketMap[bucketKey].sessions.push(session);
   }
 
-  const hiddenRoutes = rendererExtensionRegistry.getHiddenRoutes();
-  const extraNavItems = rendererExtensionRegistry.getExtraNavItems();
-
-  const coreNavItems = [
+  const navItems = [
     { to: '/models', icon: <Cpu className="h-[18px] w-[18px]" strokeWidth={2} />, label: t('sidebar.models'), testId: 'sidebar-nav-models' },
     { to: '/agents', icon: <Bot className="h-[18px] w-[18px]" strokeWidth={2} />, label: t('sidebar.agents'), testId: 'sidebar-nav-agents' },
     { to: '/channels', icon: <Network className="h-[18px] w-[18px]" strokeWidth={2} />, label: t('sidebar.channels'), testId: 'sidebar-nav-channels' },
@@ -220,21 +216,11 @@ export function Sidebar() {
     { to: '/cron', icon: <Clock className="h-[18px] w-[18px]" strokeWidth={2} />, label: t('sidebar.cronTasks'), testId: 'sidebar-nav-cron' },
   ];
 
-  const navItems = [
-    ...coreNavItems.filter((item) => !hiddenRoutes.has(item.to)),
-    ...extraNavItems.map((item) => ({
-      to: item.to,
-      icon: <item.icon className="h-[18px] w-[18px]" strokeWidth={2} />,
-      label: item.labelI18nKey ? t(item.labelI18nKey) : item.label,
-      testId: item.testId,
-    })),
-  ];
-
   return (
     <aside
       data-testid="sidebar"
       className={cn(
-        'flex min-h-0 shrink-0 flex-col overflow-hidden border-r bg-[#eae8e1]/60 dark:bg-background transition-all duration-300',
+        'flex min-h-0 shrink-0 flex-col overflow-hidden border-r bg-background dark:bg-background transition-all duration-300',
         sidebarCollapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -242,9 +228,9 @@ export function Sidebar() {
       <div className={cn("flex items-center p-2 h-12", sidebarCollapsed ? "justify-center" : "justify-between")}>
         {!sidebarCollapsed && (
           <div className="flex items-center gap-2 px-2 overflow-hidden">
-            <img src={logoSvg} alt="ClawX" className="h-5 w-auto shrink-0" />
+            <img src={logoSvg} alt="IClaw" className="h-5 w-auto shrink-0" />
             <span className="text-sm font-semibold truncate whitespace-nowrap text-foreground/90">
-              ClawX
+              IClaw
             </span>
           </div>
         )}

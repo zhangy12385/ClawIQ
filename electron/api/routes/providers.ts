@@ -18,7 +18,7 @@ import {
   syncUpdatedProviderToRuntime,
 } from '../../services/providers/provider-runtime-sync';
 import { validateApiKeyWithProvider } from '../../services/providers/provider-validation';
-import { getProviderService } from '../../services/providers/provider-service';
+import { getProviderService, saveRelayStationConfig } from '../../services/providers/provider-service';
 import { providerAccountToConfig } from '../../services/providers/provider-store';
 import type { ProviderAccount } from '../../shared/providers/types';
 import { logger } from '../../utils/logger';
@@ -344,6 +344,17 @@ export async function handleProviderRoutes(
       await providerService.deleteLegacyProvider(providerId);
       await syncDeletedProviderToRuntime(existing, providerId, ctx.gatewayManager);
       sendJson(res, 200, { success: true });
+    } catch (error) {
+      sendJson(res, 500, { success: false, error: String(error) });
+    }
+    return true;
+  }
+
+  if (url.pathname === '/api/providers/relay-station' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody<{ url: string; apiKey: string }>(req);
+      const result = await saveRelayStationConfig(body.url, body.apiKey);
+      sendJson(res, 200, result);
     } catch (error) {
       sendJson(res, 500, { success: false, error: String(error) });
     }

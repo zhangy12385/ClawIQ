@@ -11,9 +11,8 @@
 import { access, mkdir, readFile, writeFile } from 'fs/promises';
 import { constants, readdirSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { listConfiguredAgentIds } from './agent-config';
-import { getOpenClawResolvedDir } from './paths';
+import { getOpenClawResolvedDir, getOpenClawConfigDir } from './paths';
 import {
   getProviderEnvVar,
   getProviderDefaultModel,
@@ -174,7 +173,7 @@ function removeProfileFromStore(
 // ── Auth Profiles I/O ────────────────────────────────────────────
 
 function getAuthProfilesPath(agentId = 'main'): string {
-  return join(homedir(), '.openclaw', 'agents', agentId, 'agent', AUTH_PROFILE_FILENAME);
+  return join(getOpenClawConfigDir(), 'agents', agentId, 'agent', AUTH_PROFILE_FILENAME);
 }
 
 async function readAuthProfiles(agentId = 'main'): Promise<AuthProfilesStore> {
@@ -197,7 +196,7 @@ async function writeAuthProfiles(store: AuthProfilesStore, agentId = 'main'): Pr
 // ── Agent Discovery ──────────────────────────────────────────────
 
 async function discoverAgentIds(): Promise<string[]> {
-  const agentsDir = join(homedir(), '.openclaw', 'agents');
+  const agentsDir = join(getOpenClawConfigDir(), 'agents');
   try {
     if (!(await fileExists(agentsDir))) return ['main'];
     return await listConfiguredAgentIds();
@@ -208,7 +207,7 @@ async function discoverAgentIds(): Promise<string[]> {
 
 // ── OpenClaw Config Helpers ──────────────────────────────────────
 
-const OPENCLAW_CONFIG_PATH = join(homedir(), '.openclaw', 'openclaw.json');
+const OPENCLAW_CONFIG_PATH = join(getOpenClawConfigDir(), 'openclaw.json');
 const FEISHU_PLUGIN_ID_CANDIDATES = ['openclaw-lark', 'feishu-openclaw-plugin'] as const;
 const VALID_COMPACTION_MODES = new Set(['default', 'safeguard']);
 const BUILTIN_CHANNEL_IDS = new Set([
@@ -337,7 +336,7 @@ async function readOpenClawJson(): Promise<Record<string, unknown>> {
 }
 
 async function resolveInstalledFeishuPluginId(): Promise<string | null> {
-  const extensionRoot = join(homedir(), '.openclaw', 'extensions');
+  const extensionRoot = join(getOpenClawConfigDir(), 'extensions');
   for (const dirName of FEISHU_PLUGIN_ID_CANDIDATES) {
     const manifestPath = join(extensionRoot, dirName, 'openclaw.plugin.json');
     const manifest = await readJsonFile<{ id?: unknown }>(manifestPath);
@@ -533,7 +532,7 @@ export async function removeProviderFromOpenClaw(provider: string): Promise<void
 
   // 2. Remove from models.json (per-agent model registry used by pi-ai directly)
   for (const id of agentIds) {
-    const modelsPath = join(homedir(), '.openclaw', 'agents', id, 'agent', 'models.json');
+    const modelsPath = join(getOpenClawConfigDir(), 'agents', id, 'agent', 'models.json');
     try {
       if (await fileExists(modelsPath)) {
         const raw = await readFile(modelsPath, 'utf-8');
@@ -767,6 +766,23 @@ function mergeProviderModels(
   return merged;
 }
 
+/**
+ * Normalize baseUrl for openclaw.json models.providers entry.
+ * Appends /v1 if the URL doesn't already end with it.
+ */
+function normalizeProviderBaseUrl(baseUrl: string | undefined, api: string | undefined): string | undefined {
+  if (!baseUrl) return undefined;
+  // Only normalize for openai-compatible APIs
+  if (api !== 'openai-completions' && api !== 'openai-responses') {
+    return baseUrl;
+  }
+  const trimmed = baseUrl.replace(/\/+$/, '');
+  if (trimmed.endsWith('/v1')) {
+    return trimmed;
+  }
+  return `${trimmed}/v1`;
+}
+
 function upsertOpenClawProviderEntry(
   config: Record<string, unknown>,
   provider: string,
@@ -791,7 +807,7 @@ function upsertOpenClawProviderEntry(
 
   const nextProvider: Record<string, unknown> = {
     ...existingProvider,
-    baseUrl: options.baseUrl,
+    baseUrl: normalizeProviderBaseUrl(options.baseUrl, options.api),
     api: options.api,
     models: mergeProviderModels(registryModels, existingModels, runtimeModels),
   };
@@ -1068,7 +1084,7 @@ export async function getActiveOpenClawProviders(): Promise<Set<string>> {
 
 /**
  * Read models.providers entries and agents.defaults.model from openclaw.json.
- * Used by ClawX to seed the provider store when it's empty but providers are
+ * Used by IClaw to seed the provider store when it's empty but providers are
  * configured externally (e.g. via CLI or by editing openclaw.json directly).
  */
 export async function getOpenClawProvidersConfig(): Promise<{
@@ -1118,7 +1134,7 @@ export async function getOpenClawProvidersConfig(): Promise<{
 }
 
 /**
- * Write the ClawX gateway token into ~/.openclaw/openclaw.json.
+ * Write the IClaw gateway token into ~/.openclaw/openclaw.json.
  */
 export async function syncGatewayTokenToConfig(token: string): Promise<void> {
   return withConfigLock(async () => {
@@ -1140,7 +1156,7 @@ export async function syncGatewayTokenToConfig(token: string): Promise<void> {
     auth.token = token;
     gateway.auth = auth;
 
-    // Packaged ClawX loads the renderer from file://, so the gateway must allow
+    // Packaged IClaw loads the renderer from file://, so the gateway must allow
     // that origin for the chat WebSocket handshake.
     const controlUi = (
       gateway.controlUi && typeof gateway.controlUi === 'object'
@@ -1188,18 +1204,6 @@ export async function syncBrowserConfigToOpenClaw(): Promise<void> {
       changed = true;
     }
 
-    // Default ssrfPolicy to allow private network access for enterprise/internal use
-    if (browser.ssrfPolicy == null) {
-      browser.ssrfPolicy = { dangerouslyAllowPrivateNetwork: true };
-      changed = true;
-    } else if (
-      typeof browser.ssrfPolicy === 'object' &&
-      (browser.ssrfPolicy as Record<string, unknown>).dangerouslyAllowPrivateNetwork === undefined
-    ) {
-      (browser.ssrfPolicy as Record<string, unknown>).dangerouslyAllowPrivateNetwork = true;
-      changed = true;
-    }
-
     if (!changed) return;
 
     config.browser = browser;
@@ -1212,7 +1216,7 @@ export async function syncBrowserConfigToOpenClaw(): Promise<void> {
  * Ensure session idle-reset is configured in ~/.openclaw/openclaw.json.
  *
  * By default OpenClaw resets the "main" session daily at 04:00 local time,
- * which means conversations disappear after roughly one day.  ClawX sets
+ * which means conversations disappear after roughly one day.  IClaw sets
  * `session.idleMinutes` to 10 080 (7 days) so that conversations are
  * preserved for a week unless the user has explicitly configured their own
  * value.  When `idleMinutes` is set without `session.reset` /
@@ -1306,19 +1310,6 @@ export async function batchSyncConfigFields(token: string): Promise<void> {
       config.browser = browser;
       modified = true;
     }
-    // Default ssrfPolicy to allow private network access for enterprise/internal use
-    if (browser.ssrfPolicy == null) {
-      browser.ssrfPolicy = { dangerouslyAllowPrivateNetwork: true };
-      config.browser = browser;
-      modified = true;
-    } else if (
-      typeof browser.ssrfPolicy === 'object' &&
-      (browser.ssrfPolicy as Record<string, unknown>).dangerouslyAllowPrivateNetwork === undefined
-    ) {
-      (browser.ssrfPolicy as Record<string, unknown>).dangerouslyAllowPrivateNetwork = true;
-      config.browser = browser;
-      modified = true;
-    }
 
     // ── Session idle minutes ──
     const session = (
@@ -1353,6 +1344,7 @@ type AgentModelProviderEntry = {
   apiKey?: string;
   /** When true, pi-ai sends Authorization: Bearer instead of x-api-key */
   authHeader?: boolean;
+  headers?: Record<string, string>;
 };
 
 async function updateModelsJsonProviderEntriesForAgents(
@@ -1361,7 +1353,7 @@ async function updateModelsJsonProviderEntriesForAgents(
   entry: AgentModelProviderEntry,
 ): Promise<void> {
   for (const agentId of agentIds) {
-    const modelsPath = join(homedir(), '.openclaw', 'agents', agentId, 'agent', 'models.json');
+    const modelsPath = join(getOpenClawConfigDir(), 'agents', agentId, 'agent', 'models.json');
     let data: Record<string, unknown> = {};
     try {
       data = (await readJsonFile<Record<string, unknown>>(modelsPath)) ?? {};
@@ -1392,6 +1384,7 @@ async function updateModelsJsonProviderEntriesForAgents(
     if (mergedModels.length > 0) existing.models = mergedModels;
     if (entry.apiKey !== undefined) existing.apiKey = entry.apiKey;
     if (entry.authHeader !== undefined) existing.authHeader = entry.authHeader;
+    if (entry.headers !== undefined) existing.headers = entry.headers;
 
     providers[providerType] = existing;
     data.providers = providers;
@@ -1431,7 +1424,7 @@ export async function updateSingleAgentModelProvider(
  * Removes known-invalid keys that cause OpenClaw's strict Zod validation
  * to reject the entire config on startup.  Uses a conservative **blocklist**
  * approach: only strips keys that are KNOWN to be misplaced by older
- * OpenClaw/ClawX versions or external tools.
+ * OpenClaw/IClaw versions or external tools.
  *
  * Why blocklist instead of allowlist?
  *   • Allowlist (e.g. `VALID_SKILLS_KEYS`) would strip any NEW valid keys
@@ -1603,7 +1596,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
 
     // ── tools.profile & sessions.visibility ───────────────────────
     // OpenClaw 3.8+ requires tools.profile = 'full' and tools.sessions.visibility = 'all'
-    // for ClawX to properly integrate with its updated tool system.
+    // for IClaw to properly integrate with its updated tool system.
     const toolsConfig = (config.tools as Record<string, unknown> | undefined) || {};
     let toolsModified = false;
 
@@ -1620,7 +1613,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
     }
 
     // ── tools.exec approvals (OpenClaw 3.28+) ──────────────────────
-    // ClawX is a local desktop app where the user is the trusted operator.
+    // IClaw is a local desktop app where the user is the trusted operator.
     // Exec approval prompts add unnecessary friction in this context, so we
     // set security="full" (allow all commands) and ask="off" (never prompt).
     // If a user has manually configured a stricter ~/.openclaw/exec-approvals.json,
@@ -1631,7 +1624,7 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
       execConfig.ask = 'off';
       toolsConfig.exec = execConfig;
       toolsModified = true;
-      console.log('[sanitize] Set tools.exec.security="full" and tools.exec.ask="off" to disable exec approvals for ClawX desktop');
+      console.log('[sanitize] Set tools.exec.security="full" and tools.exec.ask="off" to disable exec approvals for IClaw desktop');
     }
 
     if (toolsModified) {
@@ -1657,51 +1650,6 @@ export async function sanitizeOpenClawConfig(): Promise<void> {
       const allowArr = Array.isArray(pluginsObj.allow) ? pluginsObj.allow as string[] : [];
       if (!Array.isArray(pluginsObj.allow)) {
         pluginsObj.allow = allowArr;
-      }
-
-      // ── acpx legacy config/install cleanup ─────────────────────
-      // Older OpenClaw releases allowed plugins.entries.acpx.config.command
-      // and expectedVersion overrides. Current bundled acpx schema rejects
-      // them, which causes the Gateway to fail validation before startup.
-      // Strip those keys and drop stale installs metadata that still points
-      // at an older bundled OpenClaw tree so the current bundled plugin can
-      // be re-registered cleanly.
-      const acpxEntry = isPlainRecord(pEntries.acpx) ? pEntries.acpx as Record<string, unknown> : null;
-      const acpxConfig = acpxEntry && isPlainRecord(acpxEntry.config)
-        ? acpxEntry.config as Record<string, unknown>
-        : null;
-      if (acpxConfig) {
-        for (const legacyKey of ['command', 'expectedVersion'] as const) {
-          if (legacyKey in acpxConfig) {
-            delete acpxConfig[legacyKey];
-            modified = true;
-            console.log(`[sanitize] Removed legacy plugins.entries.acpx.config.${legacyKey}`);
-          }
-        }
-      }
-
-      const installs = isPlainRecord(pluginsObj.installs) ? pluginsObj.installs as Record<string, unknown> : null;
-      const acpxInstall = installs && isPlainRecord(installs.acpx) ? installs.acpx as Record<string, unknown> : null;
-      if (acpxInstall) {
-        const currentBundledAcpxDir = join(getOpenClawResolvedDir(), 'dist', 'extensions', 'acpx').replace(/\\/g, '/');
-        const sourcePath = typeof acpxInstall.sourcePath === 'string' ? acpxInstall.sourcePath : '';
-        const installPath = typeof acpxInstall.installPath === 'string' ? acpxInstall.installPath : '';
-        const normalizedSourcePath = sourcePath.replace(/\\/g, '/');
-        const normalizedInstallPath = installPath.replace(/\\/g, '/');
-        const pointsAtDifferentBundledTree = [normalizedSourcePath, normalizedInstallPath].some(
-          (candidate) => candidate.includes('/node_modules/.pnpm/openclaw@') && candidate !== currentBundledAcpxDir,
-        );
-        const pointsAtMissingPath = (sourcePath && !(await fileExists(sourcePath)))
-          || (installPath && !(await fileExists(installPath)));
-
-        if (pointsAtDifferentBundledTree || pointsAtMissingPath) {
-          delete installs.acpx;
-          if (Object.keys(installs).length === 0) {
-            delete pluginsObj.installs;
-          }
-          modified = true;
-          console.log('[sanitize] Removed stale plugins.installs.acpx metadata');
-        }
       }
 
       const installedFeishuId = await resolveInstalledFeishuPluginId();

@@ -3,7 +3,7 @@
  * Registers all IPC handlers for main-renderer communication
  */
 import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage } from 'electron';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, extname, basename } from 'node:path';
 import crypto from 'node:crypto';
@@ -12,7 +12,7 @@ import { ClawHubService, ClawHubSearchParams, ClawHubInstallParams, ClawHubUnins
 import {
   type ProviderConfig,
 } from '../utils/secure-storage';
-import { getOpenClawStatus, getOpenClawDir, getOpenClawConfigDir, getOpenClawSkillsDir, ensureDir } from '../utils/paths';
+import { getOpenClawStatus, getOpenClawDir, getOpenClawConfigDir, getOpenClawSkillsDir, getResourcesDir, getDataDir, ensureDir } from '../utils/paths';
 import { getOpenClawCliCommand } from '../utils/openclaw-cli';
 import { getAllSettings, getSetting, resetSettings, setSetting, type AppSettings } from '../utils/store';
 import {
@@ -50,7 +50,7 @@ import { applyProxySettings } from './proxy';
 import { syncLaunchAtStartupSettingFromStore } from './launch-at-startup';
 import { proxyAwareFetch } from '../utils/proxy-fetch';
 import { getRecentTokenUsageHistory } from '../utils/token-usage';
-import { getProviderService } from '../services/providers/provider-service';
+import { getProviderService, saveRelayStationConfig } from '../services/providers/provider-service';
 import {
   getOpenClawProviderKey,
   syncDefaultProviderToRuntime,
@@ -935,7 +935,7 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
   });
 
   // Create a new cron job
-  // UI-created tasks have no delivery target — results go to the ClawX chat page.
+  // UI-created tasks have no delivery target — results go to the IClaw chat page.
   // Tasks created via external channels (Feishu, Discord, etc.) are handled
   // directly by the OpenClaw Gateway and do not pass through this IPC handler.
   ipcMain.handle('cron:create', async (_, input: {
@@ -953,7 +953,7 @@ function registerCronHandlers(gatewayManager: GatewayManager): void {
         enabled: input.enabled ?? true,
         wakeMode: 'next-heartbeat',
         sessionTarget: 'isolated',
-        // UI-created jobs deliver results via ClawX WebSocket chat events,
+        // UI-created jobs deliver results via IClaw WebSocket chat events,
         // not external messaging channels.  Setting mode='none' prevents
         // the Gateway from attempting channel delivery (which would fail
         // with "Channel is required" when no channels are configured).
@@ -2050,6 +2050,83 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
       }
     }
   );
+
+  // Save relay station configuration
+  ipcMain.handle('provider:saveRelayStation', async (_, url: string, apiKey: string, model: string) => {
+    try {
+      const result = await saveRelayStationConfig(url, apiKey);
+
+      // Use a fixed runtime provider key matching the template
+      const runtimeProviderKey = 'custom-relay-s';
+
+      // Write API key to OpenClaw auth-profiles.json
+      try {
+        await syncProviderApiKeyToRuntime('custom', 'relay-station', apiKey);
+      } catch (err) {
+        console.warn('[provider:saveRelayStation] Failed to sync key to OpenClaw auth-profiles:', err);
+      }
+
+      // Properly register the provider with its config (creates models.json, etc.)
+      try {
+        const { getProviderService } = await import('../services/providers/provider-service');
+        const providerService = getProviderService();
+        const account = await providerService.getAccount('relay-station');
+        if (account) {
+          const config = {
+            id: account.id,
+            name: account.label,
+            type: account.vendorId as ProviderConfig['type'],
+            baseUrl: url,
+            model,
+            apiProtocol: account.apiProtocol as 'openai-completions' | 'openai-responses' | 'anthropic-messages',
+            enabled: true,
+            createdAt: account.createdAt,
+            updatedAt: new Date().toISOString(),
+          };
+          await syncSavedProviderToRuntime(config, apiKey, gatewayManager);
+        }
+      } catch (err) {
+        console.warn('[provider:saveRelayStation] Failed to sync provider to runtime:', err);
+      }
+
+      // Sync as default provider
+      try {
+        await syncDefaultProviderToRuntime('relay-station', gatewayManager);
+      } catch (err) {
+        console.warn('[provider:saveRelayStation] Failed to sync default provider to OpenClaw:', err);
+      }
+
+      // Copy openclaw.json template to data\.openclaw\ with the API key substituted
+      try {
+        const templatePath = join(getResourcesDir(), 'openclaw-template', 'openclaw.json');
+        if (existsSync(templatePath)) {
+          const templateContent = readFileSync(templatePath, 'utf-8');
+          // Substitute placeholders with actual values
+          const substituted = templateContent
+            .replace(/\{\{RELAY_STATION_API_KEY\}\}/g, apiKey)
+            .replace(/\{\{RELAY_STATION_URL\}\}/g, url)
+            .replace(/\{\{RELAY_STATION_MODEL\}\}/g, model);
+
+          // Write to data\.openclaw\openclaw.json
+          const openclawDir = join(getDataDir(), '.openclaw');
+          if (!existsSync(openclawDir)) {
+            mkdirSync(openclawDir, { recursive: true });
+          }
+          const destPath = join(openclawDir, 'openclaw.json');
+          writeFileSync(destPath, substituted, 'utf-8');
+          console.log('[provider:saveRelayStation] Copied openclaw.json template to:', destPath);
+        } else {
+          console.warn('[provider:saveRelayStation] Template not found:', templatePath);
+        }
+      } catch (err) {
+        console.warn('[provider:saveRelayStation] Failed to copy openclaw.json template:', err);
+      }
+
+      return result;
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
 }
 
 /**
@@ -2343,7 +2420,7 @@ function mimeToExt(mimeType: string): string {
   return '';
 }
 
-const OUTBOUND_DIR = join(homedir(), '.openclaw', 'media', 'outbound');
+const OUTBOUND_DIR = join(getOpenClawConfigDir(), 'media', 'outbound');
 
 /**
  * Generate a preview data URL for image files.

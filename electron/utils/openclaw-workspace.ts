@@ -9,7 +9,7 @@ import { constants } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { logger } from './logger';
-import { getResourcesDir } from './paths';
+import { getResourcesDir, getOpenClawConfigDir } from './paths';
 
 const CLAWX_BEGIN = '<!-- clawx:begin -->';
 const CLAWX_END = '<!-- clawx:end -->';
@@ -29,15 +29,21 @@ async function ensureDir(dir: string): Promise<void> {
 // ── Pure helpers (no I/O) ────────────────────────────────────────
 
 /**
- * Merge a ClawX context section into an existing file's content.
+ * Merge a IClaw context section into an existing file's content.
  * If markers already exist, replaces the section in-place.
  * Otherwise appends it at the end.
+ * If markers exist AND the content between them matches the incoming section, returns existing unchanged.
  */
 export function mergeClawXSection(existing: string, section: string): string {
   const wrapped = `${CLAWX_BEGIN}\n${section.trim()}\n${CLAWX_END}`;
   const beginIdx = existing.indexOf(CLAWX_BEGIN);
   const endIdx = existing.indexOf(CLAWX_END);
   if (beginIdx !== -1 && endIdx !== -1) {
+    // Markers exist - check if content is already the same to avoid unnecessary writes
+    const existingContentBetweenMarkers = existing.slice(beginIdx + CLAWX_BEGIN.length, endIdx).trim();
+    if (existingContentBetweenMarkers === section.trim()) {
+      return existing; // No change needed, skip write
+    }
     return existing.slice(0, beginIdx) + wrapped + existing.slice(endIdx + CLAWX_END.length);
   }
   return existing.trimEnd() + '\n\n' + wrapped + '\n';
@@ -51,7 +57,7 @@ export function mergeClawXSection(existing: string, section: string): string {
  * directories that already exist under ~/.openclaw/.
  */
 async function resolveAllWorkspaceDirs(): Promise<string[]> {
-  const openclawDir = join(homedir(), '.openclaw');
+  const openclawDir = getOpenClawConfigDir();
   const dirs = new Set<string>();
 
   const configPath = join(openclawDir, 'openclaw.json');
@@ -94,7 +100,7 @@ async function resolveAllWorkspaceDirs(): Promise<string[]> {
 // ── Bootstrap file repair ────────────────────────────────────────
 
 /**
- * Detect and remove bootstrap .md files that contain only ClawX markers
+ * Detect and remove bootstrap .md files that contain only IClaw markers
  * with no meaningful OpenClaw content outside them.
  */
 export async function repairClawXOnlyBootstrapFiles(): Promise<void> {
@@ -126,9 +132,9 @@ export async function repairClawXOnlyBootstrapFiles(): Promise<void> {
       if (before === '' && after === '') {
         try {
           await unlink(filePath);
-          logger.info(`Removed ClawX-only bootstrap file for re-seeding: ${file} (${workspaceDir})`);
+          logger.info(`Removed IClaw-only bootstrap file for re-seeding: ${file} (${workspaceDir})`);
         } catch {
-          logger.warn(`Failed to remove ClawX-only bootstrap file: ${filePath}`);
+          logger.warn(`Failed to remove IClaw-only bootstrap file: ${filePath}`);
         }
       }
     }
@@ -138,14 +144,14 @@ export async function repairClawXOnlyBootstrapFiles(): Promise<void> {
 // ── Context merging ──────────────────────────────────────────────
 
 /**
- * Merge ClawX context snippets into workspace bootstrap files that
+ * Merge IClaw context snippets into workspace bootstrap files that
  * already exist on disk.  Returns the number of target files that were
  * skipped because they don't exist yet.
  */
 async function mergeClawXContextOnce(): Promise<number> {
   const contextDir = join(getResourcesDir(), 'context');
   if (!(await fileExists(contextDir))) {
-    logger.debug('ClawX context directory not found, skipping context merge');
+    logger.debug('IClaw context directory not found, skipping context merge');
     return 0;
   }
 
@@ -178,7 +184,7 @@ async function mergeClawXContextOnce(): Promise<number> {
       const merged = mergeClawXSection(existing, section);
       if (merged !== existing) {
         await writeFile(targetPath, merged, 'utf-8');
-        logger.info(`Merged ClawX context into ${targetName} (${workspaceDir})`);
+        logger.info(`Merged IClaw context into ${targetName} (${workspaceDir})`);
       }
     }
   }
@@ -190,7 +196,7 @@ const RETRY_INTERVAL_MS = 2000;
 const MAX_RETRIES = 15;
 
 /**
- * Ensure ClawX context snippets are merged into the openclaw workspace
+ * Ensure IClaw context snippets are merged into the openclaw workspace
  * bootstrap files.
  */
 export async function ensureClawXContext(): Promise<void> {
@@ -201,11 +207,11 @@ export async function ensureClawXContext(): Promise<void> {
     await new Promise((r) => setTimeout(r, RETRY_INTERVAL_MS));
     skipped = await mergeClawXContextOnce();
     if (skipped === 0) {
-      logger.info(`ClawX context merge completed after ${attempt} retry(ies)`);
+      logger.info(`IClaw context merge completed after ${attempt} retry(ies)`);
       return;
     }
-    logger.debug(`ClawX context merge: ${skipped} file(s) still missing (retry ${attempt}/${MAX_RETRIES})`);
+    logger.debug(`IClaw context merge: ${skipped} file(s) still missing (retry ${attempt}/${MAX_RETRIES})`);
   }
 
-  logger.warn(`ClawX context merge: ${skipped} file(s) still missing after ${MAX_RETRIES} retries`);
+  logger.warn(`IClaw context merge: ${skipped} file(s) still missing after ${MAX_RETRIES} retries`);
 }

@@ -3,6 +3,7 @@ import { dialog, nativeImage } from 'electron';
 import crypto from 'node:crypto';
 import { extname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { getOpenClawConfigDir } from '../../utils/paths';
 import type { HostApiContext } from '../context';
 import { parseJsonBody, sendJson } from '../route-utils';
 
@@ -53,7 +54,7 @@ function mimeToExt(mimeType: string): string {
   return '';
 }
 
-const OUTBOUND_DIR = join(homedir(), '.openclaw', 'media', 'outbound');
+const OUTBOUND_DIR = join(getOpenClawConfigDir(), 'media', 'outbound');
 
 async function generateImagePreview(filePath: string, mimeType: string): Promise<string | null> {
   try {

@@ -121,7 +121,7 @@ export function acquireProcessInstanceFileLock(
     }
     if (staleOwner.kind !== 'unknown') {
       console.info(
-        `[ClawX] Force-cleaned stale instance lock (pid=${staleOwner.pid}, format=${staleOwner.kind})`,
+        `[IClaw] Force-cleaned stale instance lock (pid=${staleOwner.pid}, format=${staleOwner.kind})`,
       );
     }
   }

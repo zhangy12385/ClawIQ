@@ -30,6 +30,14 @@ async function setupTarget(id) {
   }
 
   const targetDir = path.join(OUTPUT_BASE, id);
+  const outputNode = path.join(targetDir, 'node.exe');
+
+  // Skip if already exists
+  if (await fs.pathExists(outputNode)) {
+    echo(chalk.green`✅ ${outputNode} already exists, skipping download.`);
+    return;
+  }
+
   const tempDir = path.join(ROOT_DIR, 'temp_node_extract');
   const archivePath = path.join(ROOT_DIR, target.filename);
   const downloadUrl = `${BASE_URL}/${target.filename}`;
@@ -38,10 +46,7 @@ async function setupTarget(id) {
 
   // Only remove the target binary, not the entire directory,
   // to avoid deleting uv.exe or other binaries placed by other download scripts.
-  const outputNode = path.join(targetDir, 'node.exe');
-  if (await fs.pathExists(outputNode)) {
-    await fs.remove(outputNode);
-  }
+  await fs.remove(outputNode);
   await fs.remove(tempDir);
   await fs.ensureDir(targetDir);
   await fs.ensureDir(tempDir);

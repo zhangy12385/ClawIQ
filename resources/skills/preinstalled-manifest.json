@@ -63,6 +63,14 @@
       "ref": "main",
       "version": "main",
       "autoEnable": true
+    },
+    {
+      "slug": "akshare-stock",
+      "repo": "local",
+      "repoPath": "akshare-stock",
+      "ref": "local",
+      "version": "local",
+      "autoEnable": true
     }
   ]
 }

@@ -338,6 +338,7 @@ async function syncCustomProviderAgentModel(
     api: config.apiProtocol || 'openai-completions',
     models: modelId ? [{ id: modelId, name: modelId }] : [],
     apiKey: resolvedKey,
+    headers: config.headers,
   });
 }
 
@@ -408,6 +409,7 @@ async function buildAgentModelProviderEntry(
   models?: Array<{ id: string; name: string }>;
   apiKey?: string;
   authHeader?: boolean;
+  headers?: Record<string, string>;
 } | null> {
   const meta = getProviderConfig(config.type);
   const api = config.apiProtocol || (isUnregisteredProviderType(config.type) ? 'openai-completions' : meta?.api);
@@ -437,6 +439,7 @@ async function buildAgentModelProviderEntry(
     models: [{ id: modelId, name: modelId }],
     apiKey,
     authHeader,
+    headers: config.headers,
   };
 }
 
@@ -690,6 +693,7 @@ export async function syncDefaultProviderToRuntime(
         authHeader: targetProviderKey === 'minimax-portal' ? true : undefined,
         apiKey: targetProviderKey === 'minimax-portal' ? 'minimax-oauth' : 'qwen-oauth',
         models: defaultModelId ? [{ id: defaultModelId, name: defaultModelId }] : [],
+        headers: provider.headers,
       });
     } catch (err) {
       logger.warn(`Failed to update models.json for OAuth provider "${targetProviderKey}":`, err);
@@ -707,6 +711,7 @@ export async function syncDefaultProviderToRuntime(
       api: provider.apiProtocol || 'openai-completions',
       models: modelId ? [{ id: modelId, name: modelId }] : [],
       apiKey: providerKey,
+      headers: provider.headers,
     });
   }
 

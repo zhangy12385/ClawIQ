@@ -9,13 +9,12 @@ import { readFile, writeFile, access, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { constants } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
-import { getOpenClawDir, getResourcesDir } from './paths';
+import { getOpenClawDir, getOpenClawConfigDir, getResourcesDir } from './paths';
 import { logger } from './logger';
 import { cpAsyncSafe } from './plugin-install';
 import { withConfigLock } from './config-mutex';
 
-const OPENCLAW_CONFIG_PATH = join(homedir(), '.openclaw', 'openclaw.json');
+const OPENCLAW_CONFIG_PATH = join(getOpenClawConfigDir(), 'openclaw.json');
 
 interface SkillEntry {
     enabled?: boolean;
@@ -188,7 +187,7 @@ export async function getAllSkillConfigs(): Promise<Record<string, SkillEntry>> 
 }
 
 /**
- * Built-in skills bundled with ClawX that should be pre-deployed to
+ * Built-in skills bundled with IClaw that should be pre-deployed to
  * ~/.openclaw/skills/ on first launch.  These come from the openclaw package's
  * extensions directory and are available in both dev and packaged builds.
  */
@@ -201,7 +200,7 @@ const BUILTIN_SKILLS = [] as const;
  * block the normal startup flow.
  */
 export async function ensureBuiltinSkillsInstalled(): Promise<void> {
-    const skillsRoot = join(homedir(), '.openclaw', 'skills');
+    const skillsRoot = join(getOpenClawConfigDir(), 'skills');
 
     for (const { slug, sourceExtension } of BUILTIN_SKILLS) {
         const targetDir = join(skillsRoot, slug);
@@ -329,7 +328,7 @@ export async function ensurePreinstalledSkillsInstalled(): Promise<void> {
     }
     const lockVersions = await readPreinstalledLockVersions(sourceRoot);
 
-    const targetRoot = join(homedir(), '.openclaw', 'skills');
+    const targetRoot = join(getOpenClawConfigDir(), 'skills');
     await mkdir(targetRoot, { recursive: true });
     const toEnable: string[] = [];
 
